@@ -13,7 +13,9 @@ chown -R vagrant:vagrant /home/vagrant/.kube
 
 # Deploy flannel network
 echo "[TASK 3] Deploy calico network"
-su - vagrant -c "kubectl --kubeconfig=/etc/kubernetes/admin.conf create -f https://docs.projectcalico.org/v3.18/manifests/calico.yaml >/dev/null 2>&1"
+su - vagrant -c "kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.25.1/manifests/tigera-operator.yaml >/dev/null 2>&1"
+su - vagrant -c "kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.25.1/manifests/custom-resources.yaml >/dev/null 2>&1"
+
 
 # Generate Cluster join command
 echo "[TASK 4] Generate and save cluster join command to /joincluster.sh"
