@@ -1,45 +1,45 @@
 #!/bin/bash
 
+
+function turn_off_swap {
+  echo "[0] Turn off swap"
+  sed -i '/swap/d' /etc/fstab
+  swapoff -a
+}
+
+
 function hosts_file {
   # Update hosts file
-  echo "[TASK 1] Update /etc/hosts file"
-  echo "172.42.42.100 kmaster.example.com kmaster" >> /etc/hosts
-  echo "172.42.42.101 kworker1.example.com kworker1" >> /etc/hosts
-  echo "172.42.42.102 kworker2.example.com kworker2" >> /etc/hosts
+  echo "[1] Update /etc/hosts file"
+  echo "172.42.42.100 master master" >> /etc/hosts
+  echo "172.42.42.101 worker1 worker1" >> /etc/hosts
+  echo "172.42.42.102 worker2 worker2" >> /etc/hosts
   }
 
 function kernel_modules {
   # Update modules
-  echo "[TASK 2] Configure kernel modules"
-  sudo modprobe overlay
-  sudo modprobe br_netfilter
+  echo "[2] Configure kernel modules"
+  modprobe overlay
+  modprobe br_netfilter
   echo overlay >> /etc/modules-load.d/kubernetes.conf
   echo br_netfilter >> /etc/modules-load.d/kubernetes.conf
 } 
 
 function install_containerd {
-  echo "[TASK 3] Install containerd engine"
-  apt install curl -y
-  containerd_tar=containerd-1.6.8-linux-amd64.tar.gz
-  cni_plugin_tar=cni-plugins-linux-amd64-v1.1.1.tgz
-  wget https://github.com/containerd/containerd/releases/download/v1.6.8/${containerd_tar}
-  wget https://github.com/opencontainers/runc/releases/download/v1.1.3/runc.amd64
-  wget https://github.com/containernetworking/plugins/releases/download/v1.1.1/${cni_plugin_tar}
-  tar Cxzvf /usr/local ${containerd_tar} && rm -f ${containerd_tar}
-  install -m 755 runc.amd64 /usr/local/sbin/runc
-  mkdir -p /opt/cni/bin
-  tar Cxzvf /opt/cni/bin ${cni_plugin_tar} && rm -f ${cni_plugin_tar}
-  mkdir /etc/containerd
-  containerd config default | tee /etc/containerd/config.toml
+  echo "[4] Install containerd engine"
+  apt update -qq >/dev/null 2>&1
+  apt install -qq -y ca-certificates curl gnupg lsb-release >/dev/null 2>&1
+  mkdir -p /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg >/dev/null 2>&1
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+    $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  apt update -qq >/dev/null 2>&1
+  apt install -qq -y containerd.io >/dev/null 2>&1
+  containerd config default > /etc/containerd/config.toml
   sed -i 's/SystemdCgroup \= false/SystemdCgroup \= true/g' /etc/containerd/config.toml
-}
-
-function enable_containerd {
-  echo "[TASK 4] Enable and start containerd service"
-  # Enable containerd service
-  curl -L https://raw.githubusercontent.com/containerd/containerd/main/containerd.service -o /etc/systemd/system/containerd.service
-  systemctl daemon-reload
-  systemctl enable --now containerd
+  systemctl restart containerd
+  systemctl enable containerd >/dev/null 2>&1
 }
 
 function install_crio {
@@ -51,15 +51,20 @@ function install_crio {
   mkdir -p /usr/share/keyrings
   curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | gpg --dearmor -o /usr/share/keyrings/libcontainers-archive-keyring.gpg
   curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$VERSION/$OS/Release.key | gpg --dearmor -o /usr/share/keyrings/libcontainers-crio-archive-keyring.gpg
-  apt update -y
-  apt install -y cri-o cri-o-runc cri-tools
+  apt update && apt install -y cri-o cri-o-runc cri-tools
+
+cat >>/etc/crio/crio.conf.d/02-cgroup-manager.conf<<EOF
+[crio.runtime]
+conmon_cgroup = "pod"
+cgroup_manager = "cgroupfs"
+EOF
   systemctl enable crio.service
   systemctl start crio.service
 }
 
 function sysctl_settings {
   # Add sysctl settings
-  echo "[TASK 5] Add sysctl settings"
+  echo "[5] Add sysctl settings"
   echo "net.bridge.bridge-nf-call-ip6tables = 1" >> /etc/sysctl.d/kubernetes.conf
   echo "net.bridge.bridge-nf-call-iptables  = 1" >> /etc/sysctl.d/kubernetes.conf
   echo "net.ipv4.ip_forward                 = 1" >> /etc/sysctl.d/kubernetes.conf
@@ -69,14 +74,14 @@ function sysctl_settings {
 
 function disable_swap {
   # Disable swap
-  echo "[TASK 6] Disable and turn off SWAP"
+  echo "[6] Disable and turn off SWAP"
   sed -i '/swap/d' /etc/fstab
   swapoff -a
 }
 
 
 function ufw_config {
-  echo "[TASK 7] Open up ports for kubernetes"
+  echo "[3] Open up ports for kubernetes"
   # Opening ports for Control Plane
   ufw allow 6443/tcp
   ufw allow 2379:2380/tcp
@@ -88,56 +93,50 @@ function ufw_config {
   ufw allow 179/tcp
   ufw allow 4789/udp
   ufw allow 4789/tcp
-  ufw allow 2379/tcp
   ufw allow 8080/tcp
+  ufw allow 80/tcp
 }
 
 function apt_transport_https {
   # Install apt-transport-https pkg
-  echo "[TASK 8] Installing apt-transport-https pkg"
-  apt update && apt-get install -y apt-transport-https net-tools vim
-  curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+  echo "[7] Installing apt-transport-https pkg"
+  curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - >/dev/null 2>&1
+  apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main" >/dev/null 2>&1
 }
 
 function install_kubernetes {
-  # Add he kubernetes sources list into the sources.list directory
-  echo "deb https://apt.kubernetes.io/ kubernetes-xenial main">> /etc/apt/sources.list.d/kubernetes.list
-  ls -ltr /etc/apt/sources.list.d/kubernetes.list
-  apt update -y
-
   # Install Kubernetes
-  echo "[TASK 9] Install Kubernetes kubeadm, kubelet and kubectl"
-  apt install -y kubelet kubeadm kubectl
+  echo "[8] Install Kubernetes kubeadm, kubelet and kubectl"
+  apt install -qq -y kubeadm=1.26.0-00 kubelet=1.26.0-00 kubectl=1.26.0-00 >/dev/null 2>&1
 
   # Start and Enable kubelet service
-  echo "[TASK 10] Enable and start kubelet service"
+  echo "[9] Enable and start kubelet service"
   systemctl enable kubelet >/dev/null 2>&1
   systemctl start kubelet >/dev/null 2>&1
 }
 
 function setup_root {  
   # Enable ssh password authentication
-  echo "[TASK 11] Enable ssh password authentication"
+  echo "[10] Enable ssh password authentication"
   sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
   systemctl restart sshd
 
   # Set Root password
-  echo "[TASK 12] Set root password"
+  echo "[11] Set root password"
   echo -e "kubeadmin\nkubeadmin" | passwd root
   #echo "kubeadmin" | passwd --stdin root >/dev/null 2>&1
 }
 
 
 set -e 
+turn_off_swap
 hosts_file
 kernel_modules
-install_containerd
-enable_containerd
-install_crio
+ufw_config
+install_containerd 
+#install_crio
 sysctl_settings
 disable_swap
-ufw_config
 apt_transport_https
 install_kubernetes
 setup_root
-
