@@ -1,13 +1,20 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+
+# modes: containerd/flanner, containerd/calico, cri-o/flannel, cri-o/calico
+
 ENV['VAGRANT_NO_PARALLEL'] = 'yes'
-VM_BOX       = "bento/ubuntu-22.04"
-WORKER_NODES = 2
+VM_BOX           = "bento/ubuntu-22.04"
+ROOT_PW          = "kubeadm"
+CONTAINER_ENGINE = "containerd"           # containerd / cri-o
+CNI              = "flannel"              # calico / flannel
+WORKER_NODES     = 1
+
 
 Vagrant.configure(2) do |config|
   #config.vm.provision "file", source: "bootstrap.sh", destination: "~/bootstrap.sh"
-  config.vm.provision "shell", path: "bootstrap.sh"
+  config.vm.provision "shell", path: "bootstrap.sh", args: [ ROOT_PW, CONTAINER_ENGINE ]
 
   # Kubernetes Master Server
   config.vm.define "master" do |master|
@@ -19,8 +26,8 @@ Vagrant.configure(2) do |config|
       v.memory = 2048
       v.cpus   = 2
     end
-    #kmaster.vm.provision "file", source: "bootstrap_master.sh", destination: "~/bootstrap_master.sh"
-    master.vm.provision "shell", path: "bootstrap_master.sh"
+    #kmaster.vm.provision "file", source: "master_bootstrap.sh", destination: "~/master_bootstrap.sh"
+    master.vm.provision "shell", path: "master_bootstrap.sh", args: [ CNI, CONTAINER_ENGINE ]
   end
 
 
@@ -35,8 +42,8 @@ Vagrant.configure(2) do |config|
         v.memory = 1024
         v.cpus   = 2 
       end
-      #workernode.vm.provision "file", source: "bootstrap_worker.sh", destination: "~/bootstrap_worker.sh"
-      workernode.vm.provision "shell", path: "bootstrap_worker.sh"
+      #workernode.vm.provision "file", source: "worker_bootstrap.sh", destination: "~/worker_bootstrap.sh"
+      workernode.vm.provision "shell", path: "worker_bootstrap.sh", args: ROOT_PW
     end
   end
 end
