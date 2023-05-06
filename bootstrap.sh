@@ -74,7 +74,7 @@ function install_crio {
   curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | gpg --dearmor -o /usr/share/keyrings/libcontainers-archive-keyring.gpg
   curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$VERSION/$OS/Release.key | gpg --dearmor -o /usr/share/keyrings/libcontainers-crio-archive-keyring.gpg
   apt update && apt install -y cri-o cri-o-runc cri-tools
-cat >>/etc/crio/crio.conf.d/02-cgroup-manager.conf<<EOF
+  cat >>/etc/crio/crio.conf.d/02-cgroup-manager.conf<<EOF
 [crio.runtime]
 conmon_cgroup = "pod"
 cgroup_manager = "cgroupfs"

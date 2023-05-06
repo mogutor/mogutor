@@ -8,8 +8,8 @@ ENV['VAGRANT_NO_PARALLEL'] = 'yes'
 VM_BOX           = "bento/ubuntu-22.04"
 ROOT_PW          = "kubeadm"
 CONTAINER_ENGINE = "containerd"           # containerd / cri-o
-CNI              = "flannel"              # calico / flannel
-WORKER_NODES     = 1
+CNI              = "calico"              # calico / flannel
+WORKER_NODES     = 2
 
 
 Vagrant.configure(2) do |config|
@@ -26,7 +26,7 @@ Vagrant.configure(2) do |config|
       v.memory = 2048
       v.cpus   = 2
     end
-    #kmaster.vm.provision "file", source: "master_bootstrap.sh", destination: "~/master_bootstrap.sh"
+    #master.vm.provision "file", source: "master_bootstrap.sh", destination: "~/master_bootstrap.sh"
     master.vm.provision "shell", path: "master_bootstrap.sh", args: [ CNI, CONTAINER_ENGINE ]
   end
 
